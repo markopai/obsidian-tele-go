@@ -11,7 +11,11 @@ export default class TelegramSyncPlugin extends Plugin {
   connection!: any;
   channel!: any;
   retryTimeout: NodeJS.Timeout | null = null;
+  configPollingInterval: NodeJS.Timeout | null = null;
   isReconnecting: boolean = false;
+  currentTopics: string[] = [];
+  currentQueue: string = "";
+  currentExchange: string = "";
 
   async onload() {
     await this.loadSettings();
@@ -23,9 +27,7 @@ export default class TelegramSyncPlugin extends Plugin {
   }
 
   async onunload() {
-    if (this.retryTimeout) {
-      clearTimeout(this.retryTimeout);
-    }
+    this.clearTimers();
     if (this.channel) {
       this.channel.removeAllListeners();
       await this.channel.close();
@@ -34,6 +36,11 @@ export default class TelegramSyncPlugin extends Plugin {
       this.connection.removeAllListeners();
       await this.connection.close();
     }
+  }
+
+  clearTimers() {
+    if (this.retryTimeout) clearTimeout(this.retryTimeout);
+    if (this.configPollingInterval) clearInterval(this.configPollingInterval);
   }
 
   async loadSettings() {
@@ -76,17 +83,25 @@ export default class TelegramSyncPlugin extends Plugin {
         this.scheduleReconnect();
       });
 
-      await this.channel.assertExchange(config.exchange, "topic", {
+      this.currentExchange = config.exchange;
+      await this.channel.assertExchange(this.currentExchange, "topic", {
         durable: true,
       });
 
       const q = await this.channel.assertQueue("", { exclusive: true });
+      this.currentQueue = q.queue;
+      this.currentTopics = [];
 
       for (const topic of config.topics) {
-        await this.channel.bindQueue(q.queue, config.exchange, topic);
+        await this.channel.bindQueue(
+          this.currentQueue,
+          this.currentExchange,
+          topic,
+        );
+        this.currentTopics.push(topic);
       }
 
-      await this.channel.consume(q.queue, async (msg: any) => {
+      await this.channel.consume(this.currentQueue, async (msg: any) => {
         if (msg) {
           await this.saveMessage(msg.fields.routingKey, msg.content.toString());
           this.channel.ack(msg);
@@ -95,23 +110,51 @@ export default class TelegramSyncPlugin extends Plugin {
 
       new Notice("Успешное подключение к RabbitMQ и загрузка конфигов");
 
-      if (this.retryTimeout) {
-        clearTimeout(this.retryTimeout);
-        this.retryTimeout = null;
-      }
+      this.clearTimers();
       this.isReconnecting = false;
+
+      this.configPollingInterval = setInterval(() => this.pollConfig(), 60000);
     } catch (e) {
-      new Notice("Ошибка подключения. Повтор через минуту...");
+      new Notice("Ошибка подключения. Повтор через 15 секунд...");
       this.scheduleReconnect();
     }
   }
 
-  scheduleReconnect() {
-    if (this.retryTimeout) {
-      clearTimeout(this.retryTimeout);
+  async pollConfig() {
+    if (!this.channel || this.isReconnecting) return;
+
+    try {
+      const configRes = await requestUrl(this.settings.configUrl);
+      const config = configRes.json;
+
+      if (config.exchange !== this.currentExchange) {
+        return;
+      }
+
+      const newTopics = config.topics.filter(
+        (t: string) => !this.currentTopics.includes(t),
+      );
+
+      if (newTopics.length > 0) {
+        for (const topic of newTopics) {
+          await this.channel.bindQueue(
+            this.currentQueue,
+            this.currentExchange,
+            topic,
+          );
+          this.currentTopics.push(topic);
+        }
+        new Notice(`Добавлены новые топики: ${newTopics.join(", ")}`);
+      }
+    } catch (e) {
+      console.error(e);
     }
+  }
+
+  scheduleReconnect() {
+    this.clearTimers();
     this.isReconnecting = false;
-    this.retryTimeout = setTimeout(() => this.initRabbitMQ(), 60000);
+    this.retryTimeout = setTimeout(() => this.initRabbitMQ(), 15000);
   }
 
   async saveMessage(routingKey: string, content: string) {
