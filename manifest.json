@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-tele-go",
+  "name": "TeleGo",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "Obsidian сервер для синхронизации с ТГ ботом через RabbitMQ",
+  "author": "markopai",
+  "authorUrl": "https://github.com/markopai/obsidian-graphlint",
+  "isDesktopOnly": true
+}

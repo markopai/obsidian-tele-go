@@ -1,0 +1,18 @@
+# Ignore all files by default
+.*
+
+# But do not ignore this .gitignore file
+!.gitignore
+
+# Ignore tree output file
+gptree_output.txt
+
+# Ignore npm dependencies
+node_modules/
+
+# Do not commit built main.js and sourcemaps
+main.js
+*.js.map
+
+# macOS junk file
+.DS_Store
