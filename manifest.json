@@ -1,7 +1,7 @@
 {
   "id": "obsidian-tele-go",
   "name": "TeleGo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "0.15.0",
   "description": "Obsidian сервер для синхронизации с ТГ ботом через RabbitMQ",
   "author": "markopai",

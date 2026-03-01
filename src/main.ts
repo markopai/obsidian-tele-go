@@ -52,74 +52,44 @@ export default class TelegramSyncPlugin extends Plugin {
   }
 
   async initRabbitMQ() {
-    if (this.isReconnecting) return;
-    this.isReconnecting = true;
-
     try {
       const configRes = await requestUrl(this.settings.configUrl);
       const config = configRes.json;
 
       this.connection = await amqp.connect(this.settings.rabbitUrl);
-
-      this.connection.on("error", () => {
-        new Notice("RabbitMQ: Ошибка соединения");
-        this.scheduleReconnect();
-      });
-
-      this.connection.on("close", () => {
-        new Notice("RabbitMQ: Соединение закрыто");
-        this.scheduleReconnect();
-      });
-
       this.channel = await this.connection.createChannel();
 
-      this.channel.on("error", () => {
-        new Notice("RabbitMQ: Ошибка канала");
-        this.scheduleReconnect();
-      });
-
-      this.channel.on("close", () => {
-        new Notice("RabbitMQ: Канал закрыт");
-        this.scheduleReconnect();
-      });
-
-      this.currentExchange = config.exchange;
-      await this.channel.assertExchange(this.currentExchange, "topic", {
+      await this.channel.assertExchange(config.exchange, "topic", {
         durable: true,
       });
 
-      const q = await this.channel.assertQueue("", { exclusive: true });
-      this.currentQueue = q.queue;
-      this.currentTopics = [];
-
       for (const topic of config.topics) {
-        await this.channel.bindQueue(
-          this.currentQueue,
-          this.currentExchange,
-          topic,
+        const queueName = topic.replace("tg.", "");
+
+        await this.channel.assertQueue(queueName, {
+          durable: true,
+        });
+
+        await this.channel.consume(
+          queueName,
+          async (msg: amqp.ConsumeMessage | null) => {
+            if (msg) {
+              await this.saveMessage(
+                msg.fields.routingKey,
+                msg.content.toString(),
+              );
+              this.channel.ack(msg);
+            }
+          },
         );
-        this.currentTopics.push(topic);
       }
 
-      await this.channel.consume(this.currentQueue, async (msg: any) => {
-        if (msg) {
-          await this.saveMessage(msg.fields.routingKey, msg.content.toString());
-          this.channel.ack(msg);
-        }
-      });
-
-      new Notice("Успешное подключение к RabbitMQ и загрузка конфигов");
-
-      this.clearTimers();
-      this.isReconnecting = false;
-
-      this.configPollingInterval = setInterval(() => this.pollConfig(), 60000);
+      new Notice("Успешное подключение к RabbitMQ");
     } catch (e) {
-      new Notice("Ошибка подключения. Повтор через 15 секунд...");
-      this.scheduleReconnect();
+      console.error(e);
+      new Notice("Ошибка подключения к RabbitMQ. Проверьте консоль.");
     }
   }
-
   async pollConfig() {
     if (!this.channel || this.isReconnecting) return;
 
