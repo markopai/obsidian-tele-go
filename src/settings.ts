@@ -2,17 +2,15 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import TelegramSyncPlugin from "./main";
 
 export interface PluginSettings {
-  serverIp: string; // Новый параметр
   saveFolder: string;
   configUrl: string;
   rabbitUrl: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-  serverIp: "127.0.0.1:8080",
   saveFolder: "TelegramSync",
-  configUrl: "http://127.0.0.1:8080/config.json",
-  rabbitUrl: "amqp://guest:guest@127.0.0.1:5672/",
+  configUrl: "http://YOUR_SERVER_IP/config.json",
+  rabbitUrl: "amqp://guest:guest@IP:5672/",
 };
 
 export class TelegramSyncSettingTab extends PluginSettingTab {
@@ -26,46 +24,37 @@ export class TelegramSyncSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Настройки интеграции" });
+    containerEl.createEl("h2", { text: "Настройки интеграции с RabbitMQ" });
 
-    new Setting(containerEl)
-      .setName("IP и Порт сервера")
-      .setDesc("Пример: 192.168.1.10:8080")
-      .addText((text) =>
-        text.setValue(this.plugin.settings.serverIp).onChange(async (value) => {
-          this.plugin.settings.serverIp = value;
-          // Автоматически обновляем зависимые URL для удобства
-          this.plugin.settings.configUrl = `http://${value}/config.json`;
-          const ipOnly = value.split(":")[0];
-          this.plugin.settings.rabbitUrl = `amqp://guest:guest@${ipOnly}:5672/`;
+    new Setting(containerEl).setName("Папка для сохранения").addText((text) => {
+      text.inputEl.style.width = "300px";
+      text
+        .setPlaceholder("TelegramSync")
+        .setValue(this.plugin.settings.saveFolder)
+        .onChange(async (value) => {
+          this.plugin.settings.saveFolder = value;
           await this.plugin.saveSettings();
-          this.display(); // Перерисовываем, чтобы обновить текстовые поля ниже
-        }),
-      );
-
-    new Setting(containerEl).setName("Папка для сохранения").addText((text) =>
-      text.setValue(this.plugin.settings.saveFolder).onChange(async (value) => {
-        this.plugin.settings.saveFolder = value;
-        await this.plugin.saveSettings();
-      }),
-    );
-
-    new Setting(containerEl).setName("Полный URL конфига").addText((text) =>
-      text.setValue(this.plugin.settings.configUrl).onChange(async (value) => {
-        this.plugin.settings.configUrl = value;
-        await this.plugin.saveSettings();
-      }),
-    );
+        });
+    });
 
     new Setting(containerEl)
-      .setName("RabbitMQ Connection String")
-      .addText((text) =>
+      .setName("URL конфигурации (HTTP GET)")
+      .addText((text) => {
+        text.inputEl.style.width = "400px";
         text
-          .setValue(this.plugin.settings.rabbitUrl)
+          .setValue(this.plugin.settings.configUrl)
           .onChange(async (value) => {
-            this.plugin.settings.rabbitUrl = value;
+            this.plugin.settings.configUrl = value;
             await this.plugin.saveSettings();
-          }),
-      );
+          });
+      });
+
+    new Setting(containerEl).setName("RabbitMQ URL").addText((text) => {
+      text.inputEl.style.width = "400px";
+      text.setValue(this.plugin.settings.rabbitUrl).onChange(async (value) => {
+        this.plugin.settings.rabbitUrl = value;
+        await this.plugin.saveSettings();
+      });
+    });
   }
 }

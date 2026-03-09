@@ -5,7 +5,7 @@
 !.gitignore
 
 # Ignore tree output file
-gptree_output.txt
+gptree*
 
 # Ignore npm dependencies
 node_modules/
