@@ -115,7 +115,6 @@ export default class TelegramSyncPlugin extends Plugin {
         exclusive: false, // Очередь не должна удаляться при дисконнекте
         durable: true, // Очередь должна переживать перезагрузку RabbitMQ
       });
-      this.queueName = q.queue;
 
       // Очищаем кэш топиков, так как имя очереди изменилось и биндинги слетели
       this.currentTopics.clear();
@@ -149,6 +148,7 @@ export default class TelegramSyncPlugin extends Plugin {
     } catch (e) {
       console.error("Init Error RabbitMQ:", e);
       console.warn("Ошибка подключения к RabbitMQ. Повторная попытка...");
+
       this.scheduleReconnect();
     }
   }
