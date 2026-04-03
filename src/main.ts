@@ -148,7 +148,7 @@ export default class TelegramSyncPlugin extends Plugin {
       }, 10000);
     } catch (e) {
       console.error("Init Error RabbitMQ:", e);
-      new Notice("Ошибка подключения к RabbitMQ. Повторная попытка...");
+      console.warn("Ошибка подключения к RabbitMQ. Повторная попытка...");
       this.scheduleReconnect();
     }
   }
